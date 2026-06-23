@@ -343,10 +343,19 @@ const fromRequest = Effect.fn("OpenAIChat.fromRequest")(function* (request: LLMR
   // `fromRequest` returns the provider body only. Endpoint, auth, framing,
   // validation, and HTTP execution are composed by `Route.make`.
   const generation = request.generation
+  
+  // Some backends require tool definitions whenever tool results appear in message
+  // history, even when no new tools are offered in the current turn (e.g. during
+  // session compaction). Send an empty tools array in that case.
+  const hasToolResults = request.messages.some((msg) =>
+    msg.role === "tool" && msg.content.some((part) => part.type === "tool-result"),
+  )
+  const shouldIncludeTools = request.tools.length > 0 || hasToolResults
+  
   return {
     model: request.model.id,
     messages: yield* lowerMessages(request),
-    tools: request.tools.length === 0 ? undefined : request.tools.map(lowerTool),
+    tools: shouldIncludeTools ? request.tools.map(lowerTool) : undefined,
     tool_choice: request.toolChoice ? yield* lowerToolChoice(request.toolChoice) : undefined,
     stream: true as const,
     stream_options: { include_usage: true },

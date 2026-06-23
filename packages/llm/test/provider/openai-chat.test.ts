@@ -218,9 +218,32 @@ describe("OpenAI Chat route", () => {
           },
           { role: "tool", tool_call_id: "call_1", content: encodeJson({ forecast: "sunny" }) },
         ],
+        tools: [],
         stream: true,
         stream_options: { include_usage: true },
       })
+    }),
+  )
+
+  it.effect("includes empty tools array when tool results exist but no tools are offered", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<OpenAIChat.OpenAIChatBody>(
+        LLM.request({
+          model,
+          messages: [
+            Message.user("What is the weather?"),
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "lookup", input: { query: "weather" } })]),
+            Message.tool({ id: "call_1", name: "lookup", result: { forecast: "sunny" } }),
+            Message.user("Summarize the above."),
+          ],
+          tools: [],
+        }),
+      )
+
+      // tools must be present (even if empty) so backends that require tool
+      // definitions alongside tool results in history don't reject the request.
+      expect(prepared.body.tools).toEqual([])
+      expect(prepared.body.tool_choice).toBeUndefined()
     }),
   )
 
